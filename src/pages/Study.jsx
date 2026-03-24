@@ -8,7 +8,8 @@ import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Brain, Clock, Zap, ArrowLeft, ArrowRight, CheckCircle, XCircle,
-  Flag, BookOpen, RotateCcw, BarChart3, Timer, Play, X, Send, Square, Lock
+  Flag, BookOpen, RotateCcw, BarChart3, Timer, Play, X, Send, Square, Lock,
+  Bookmark, BookmarkCheck, Filter
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
@@ -135,18 +136,39 @@ export default function Study() {
   const [sessionId, setSessionId] = useState(null); // Track saved session for review
   const [user, setUser] = useState(null);
   const [showPaywall, setShowPaywall] = useState(false);
-  const [filters, setFilters] = useState({ category: "all", difficulty: "all", count: "20" });
+  const [filters, setFilters] = useState({ category: "all", difficulty: "all", count: "20", source: "all" });
+  const [userProgress, setUserProgress] = useState([]); // All past progress for this user
+  const [bookmarkedIds, setBookmarkedIds] = useState(new Set()); // Question IDs bookmarked
+  const [answeredIds, setAnsweredIds] = useState(new Set()); // Question IDs already answered
+  const [incorrectIds, setIncorrectIds] = useState(new Set()); // Question IDs answered incorrectly
 
   const CATEGORIES = [{ value: "all", label: "All Categories" }, ...qbank.categories];
   const freeLimit = qbank.trial.freeQuestions || 50;
 
-  // ─── Load questions ──────────────────────────────────
+  // ─── Load questions + user progress ───────────────────
   useEffect(() => {
     (async () => {
       setIsLoadingQuestions(true);
       try {
-        const [dbQ, u] = await Promise.all([Question.list(), User.me()]);
+        const [dbQ, u, progress] = await Promise.all([Question.list(), User.me(), UserProgress.list()]);
         setUser(u);
+        setUserProgress(progress);
+
+        // Build sets for filtering
+        const answered = new Set();
+        const incorrect = new Set();
+        const bookmarked = new Set();
+        progress.forEach(p => {
+          if (p.question_id) {
+            answered.add(p.question_id);
+            if (p.is_correct === false) incorrect.add(p.question_id);
+            if (p.is_bookmarked) bookmarked.add(p.question_id);
+          }
+        });
+        setAnsweredIds(answered);
+        setIncorrectIds(incorrect);
+        setBookmarkedIds(bookmarked);
+
         const isPaid = u.subscription_status === 'active' || u.subscription_status === 'paid';
         if (!isPaid && (u.questions_answered_count || 0) >= freeLimit) setShowPaywall(true);
         setAllQuestions(dbQ.length > 0 ? dbQ : (qbank.sampleQuestions || []).map(sq => ({
@@ -199,6 +221,16 @@ export default function Study() {
     let pool = [...allQuestions];
     if (filters.category !== "all") pool = pool.filter(q => q.category === filters.category);
     if (filters.difficulty !== "all") pool = pool.filter(q => q.difficulty === filters.difficulty);
+
+    // Apply source filter
+    if (filters.source === "unused") {
+      pool = pool.filter(q => !answeredIds.has(q.id));
+    } else if (filters.source === "incorrect") {
+      pool = pool.filter(q => incorrectIds.has(q.id));
+    } else if (filters.source === "bookmarked") {
+      pool = pool.filter(q => bookmarkedIds.has(q.id));
+    }
+
     for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
     const qs = pool.slice(0, Math.min(parseInt(filters.count) || 20, 40, pool.length));
     if (qs.length === 0) return;
@@ -267,8 +299,15 @@ export default function Study() {
       let pool = allQuestions;
       if (filters.category !== "all") pool = pool.filter(q => q.category === filters.category);
       if (filters.difficulty !== "all") pool = pool.filter(q => q.difficulty === filters.difficulty);
+      if (filters.source === "unused") pool = pool.filter(q => !answeredIds.has(q.id));
+      else if (filters.source === "incorrect") pool = pool.filter(q => incorrectIds.has(q.id));
+      else if (filters.source === "bookmarked") pool = pool.filter(q => bookmarkedIds.has(q.id));
       return pool.length;
     })();
+
+    const unusedCount = allQuestions.filter(q => !answeredIds.has(q.id)).length;
+    const incorrectCount = incorrectIds.size;
+    const bookmarkedCount = bookmarkedIds.size;
 
     return (
       <div className="max-w-3xl mx-auto p-6 md:p-10">
@@ -305,6 +344,38 @@ export default function Study() {
           </div>
         </div>
 
+        {/* Question Source Filter */}
+        <div className="mb-8">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">
+            <Filter className="w-3 h-3 inline mr-1" />Question Source
+          </h3>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {[
+              { value: "all", label: "All Questions", count: allQuestions.length, icon: BookOpen },
+              { value: "unused", label: "Unused Only", count: unusedCount, icon: Play },
+              { value: "incorrect", label: "Previously Incorrect", count: incorrectCount, icon: XCircle },
+              { value: "bookmarked", label: "Bookmarked", count: bookmarkedCount, icon: Bookmark },
+            ].map(opt => (
+              <button
+                key={opt.value}
+                onClick={() => setFilters(p => ({ ...p, source: opt.value }))}
+                disabled={opt.value !== "all" && opt.count === 0}
+                className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all text-center ${
+                  filters.source === opt.value
+                    ? 'border-blue-500 bg-blue-50 shadow-sm ring-2 ring-blue-200'
+                    : opt.count === 0 && opt.value !== "all"
+                      ? 'border-slate-100 bg-slate-50 opacity-50 cursor-not-allowed'
+                      : 'border-slate-200 bg-white hover:border-slate-300'
+                }`}
+              >
+                <opt.icon className={`w-5 h-5 ${filters.source === opt.value ? 'text-blue-600' : 'text-slate-400'}`} />
+                <span className="text-xs font-semibold text-slate-700">{opt.label}</span>
+                <span className={`text-[11px] ${filters.source === opt.value ? 'text-blue-600 font-semibold' : 'text-slate-400'}`}>{opt.count}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div className="mb-8">
           <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Block Settings</h3>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -315,7 +386,11 @@ export default function Study() {
             <div><label className="text-xs font-semibold text-slate-600 mb-1.5 block">Questions (max 40)</label>
               <Select value={filters.count} onValueChange={v => setFilters(p => ({ ...p, count: v }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="5">5</SelectItem><SelectItem value="10">10</SelectItem><SelectItem value="20">20</SelectItem><SelectItem value="30">30</SelectItem><SelectItem value="40">40 (Full Block)</SelectItem></SelectContent></Select></div>
           </div>
-          {!isLoadingQuestions && <p className="text-xs text-slate-500 mt-2">{filteredCount} questions match your filters</p>}
+          {!isLoadingQuestions && (
+            <p className={`text-xs mt-2 ${filteredCount === 0 ? 'text-red-500 font-semibold' : 'text-slate-500'}`}>
+              {filteredCount === 0 ? 'No questions match these filters — try adjusting' : `${filteredCount} questions match your filters`}
+            </p>
+          )}
         </div>
 
         <Button onClick={startSession} disabled={!mode || isLoadingQuestions || filteredCount === 0}
@@ -451,7 +526,39 @@ export default function Study() {
             onClick={toggleFlag}
           >
             <Flag className={`w-3.5 h-3.5 ${flagged.includes(currentIdx) ? 'fill-white' : ''}`} />
-            <span className="text-xs">{flagged.includes(currentIdx) ? 'Marked' : 'Mark'}</span>
+            <span className="text-xs hidden sm:inline">{flagged.includes(currentIdx) ? 'Marked' : 'Mark'}</span>
+          </Button>
+
+          {/* Bookmark */}
+          <Button
+            variant={bookmarkedIds.has(currentQ?.id) ? "default" : "outline"}
+            size="sm"
+            className={`h-8 gap-1.5 ${bookmarkedIds.has(currentQ?.id) ? 'bg-blue-500 hover:bg-blue-600 text-white' : ''}`}
+            onClick={async () => {
+              if (!currentQ) return;
+              const isCurrentlyBookmarked = bookmarkedIds.has(currentQ.id);
+              // Toggle bookmark
+              const newSet = new Set(bookmarkedIds);
+              if (isCurrentlyBookmarked) newSet.delete(currentQ.id);
+              else newSet.add(currentQ.id);
+              setBookmarkedIds(newSet);
+              // Find existing progress record to update, or create one
+              try {
+                const existing = userProgress.find(p => p.question_id === currentQ.id);
+                if (existing) {
+                  await UserProgress.update(existing.id, { is_bookmarked: !isCurrentlyBookmarked });
+                } else {
+                  const created = await UserProgress.create({ question_id: currentQ.id, is_bookmarked: true, is_correct: false, selected_option: -1, time_spent: 0, mode: 'bookmark' });
+                  setUserProgress(prev => [...prev, created]);
+                }
+              } catch (e) { console.error("Bookmark error:", e); }
+            }}
+          >
+            {bookmarkedIds.has(currentQ?.id)
+              ? <BookmarkCheck className="w-3.5 h-3.5" />
+              : <Bookmark className="w-3.5 h-3.5" />
+            }
+            <span className="text-xs hidden sm:inline">{bookmarkedIds.has(currentQ?.id) ? 'Saved' : 'Save'}</span>
           </Button>
 
           <div className="flex-1" />
