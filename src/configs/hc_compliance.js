@@ -18,14 +18,13 @@ export default {
 
   // ─── Categories (question topics for this qbank) ───
   categories: [
-    { value: 'hipaa_privacy',       label: 'HIPAA Privacy Rule',           color: 'from-blue-500 to-blue-600' },
-    { value: 'privacy_security',    label: 'HIPAA Security Rule',          color: 'from-emerald-500 to-emerald-600' },
-    { value: 'fraud_abuse',         label: 'Fraud & Abuse Laws',           color: 'from-red-500 to-red-600' },
-    { value: 'coding_billing',      label: 'Coding & Billing Compliance',  color: 'from-amber-500 to-amber-600' },
-    { value: 'compliance_programs', label: 'Compliance Programs',           color: 'from-purple-500 to-purple-600' },
-    { value: 'stark_law',           label: 'Stark Law & Self-Referral',    color: 'from-pink-500 to-pink-600' },
-    { value: 'investigations',      label: 'Investigations & Enforcement', color: 'from-orange-500 to-orange-600' },
-    { value: 'ethics',              label: 'Healthcare Ethics',            color: 'from-teal-500 to-teal-600' },
+    { value: 'standards_policies',          label: 'Standards, Policies & Procedures',        color: 'from-blue-500 to-blue-600' },
+    { value: 'compliance_admin',            label: 'Compliance Program Administration',       color: 'from-emerald-500 to-emerald-600' },
+    { value: 'screening_evaluation',        label: 'Screening & Evaluation',                  color: 'from-amber-500 to-amber-600' },
+    { value: 'communication_training',      label: 'Communication, Education & Training',     color: 'from-purple-500 to-purple-600' },
+    { value: 'monitoring_auditing',         label: 'Monitoring, Auditing & Internal Reporting', color: 'from-red-500 to-red-600' },
+    { value: 'discipline_enforcement',      label: 'Discipline for Non-Compliance',           color: 'from-orange-500 to-orange-600' },
+    { value: 'investigations_remediation',  label: 'Investigations & Remedial Measures',      color: 'from-teal-500 to-teal-600' },
   ],
 
   // ─── Exam Configurations ───────────────────────────
@@ -38,8 +37,8 @@ export default {
       questionCount: 100,
       timeLimit: 150,       // minutes
       passingScore: 70,
-      categories: ['hipaa_privacy', 'privacy_security', 'fraud_abuse', 'coding_billing', 'compliance_programs', 'stark_law'],
-      features: ['100 multiple choice questions', '2.5 hours time limit', 'Covers all CHC exam domains', 'Instant scoring and feedback'],
+      categories: ['standards_policies', 'compliance_admin', 'screening_evaluation', 'communication_training', 'monitoring_auditing', 'discipline_enforcement', 'investigations_remediation'],
+      features: ['100 multiple choice questions', '2.5 hours time limit', 'Covers all 7 CHC exam domains', 'Instant scoring and feedback'],
       color: 'from-blue-600 to-blue-700',
     },
     {
@@ -50,7 +49,7 @@ export default {
       questionCount: 100,
       timeLimit: 120,
       passingScore: 75,
-      categories: ['hipaa_privacy', 'privacy_security', 'investigations', 'ethics', 'coding_billing', 'compliance_programs'],
+      categories: ['standards_policies', 'communication_training', 'monitoring_auditing', 'investigations_remediation', 'compliance_admin'],
       features: ['100 multiple choice questions', '2 hours time limit', 'Covers all CHPC exam domains', 'Detailed performance analysis'],
       color: 'from-purple-600 to-purple-700',
     },
@@ -79,7 +78,7 @@ export default {
   // ─── Sample questions (for Study page offline mode) ─
   sampleQuestions: [
     {
-      id: 1, category: 'hipaa_privacy', difficulty: 'intermediate',
+      id: 1, category: 'standards_policies', difficulty: 'intermediate',
       stem: 'A hospital billing employee accesses a neighbor\'s medical records without a treatment, payment, or operations reason, then mentions the hospitalization to mutual friends.',
       question: 'Which BEST describes this situation under HIPAA?',
       options: [
@@ -94,7 +93,7 @@ export default {
       user_stats: { pct_A: 8, pct_B: 68, pct_C: 16, pct_D: 8, avg_time: 82 },
     },
     {
-      id: 2, category: 'fraud_abuse', difficulty: 'advanced',
+      id: 2, category: 'discipline_enforcement', difficulty: 'advanced',
       stem: 'A large orthopedic group provides $800/year in free services and gifts to referring primary care physicians. They bill Medicare for all surgical procedures.',
       question: 'Which federal law is MOST directly implicated?',
       options: [
@@ -109,7 +108,7 @@ export default {
       user_stats: { pct_A: 14, pct_B: 62, pct_C: 18, pct_D: 6, avg_time: 105 },
     },
     {
-      id: 3, category: 'compliance_programs', difficulty: 'basic',
+      id: 3, category: 'compliance_admin', difficulty: 'basic',
       stem: 'A newly appointed CCO reviews the OIG Compliance Program Guidance and finds several gaps in the organization\'s program.',
       question: 'Which OIG element is MOST foundational?',
       options: [

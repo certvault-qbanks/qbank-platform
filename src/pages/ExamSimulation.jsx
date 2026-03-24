@@ -46,7 +46,15 @@ export default function ExamSimulationPage() {
     const u = await User.me(); setUser(u);
     if (u.subscription_status !== 'paid' && u.subscription_status !== 'active' && (u.questions_answered_count || 0) >= qbank.trial.freeQuestions) { setShowPaywall(true); setIsLoading(false); return; }
     let qs = await Question.list();
-    if (examConfig?.categories) qs = qs.filter(q => examConfig.categories.includes(q.category));
+    console.log(`Loaded ${qs.length} questions from DB`);
+    // Filter by exam categories if configured
+    if (examConfig?.categories && examConfig.categories.length > 0) {
+      const filtered = qs.filter(q => examConfig.categories.includes(q.category));
+      console.log(`After category filter: ${filtered.length} (categories: ${examConfig.categories.join(', ')})`);
+      // Only apply filter if it yields results; otherwise use all questions
+      if (filtered.length > 0) qs = filtered;
+    }
+    // Shuffle
     for (let i = qs.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [qs[i], qs[j]] = [qs[j], qs[i]]; }
     setQuestions(qs.slice(0, Math.min(examConfig?.questionCount || 50, qs.length)));
   } catch(e) { console.error(e); } setIsLoading(false); })(); }, []);

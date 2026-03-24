@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { qbank } from "@/configs";
+import { Question } from "@/entities/all";
 
 const STUDY_MODES = {
   tutor: { name: "Tutor Mode", desc: "Untimed · Instant feedback", icon: "🧠", timed: false, showImmediate: true },
@@ -57,16 +58,54 @@ export default function Study() {
   const [phase, setPhase] = useState("setup");
   const [mode, setMode] = useState(null);
   const [questions, setQuestions] = useState([]);
+  const [allQuestions, setAllQuestions] = useState([]);
+  const [isLoadingQuestions, setIsLoadingQuestions] = useState(true);
   const [currentIdx, setCurrentIdx] = useState(0);
   const [answers, setAnswers] = useState({});
   const [flagged, setFlagged] = useState([]);
   const [timeLeft, setTimeLeft] = useState(0);
   const [timerPaused, setTimerPaused] = useState(false);
   const [questionStart, setQuestionStart] = useState(Date.now());
-  const [filters, setFilters] = useState({ category: "all", difficulty: "all", count: 5, timePressure: "1" });
+  const [filters, setFilters] = useState({ category: "all", difficulty: "all", count: 20, timePressure: "1" });
 
   const CATEGORIES = [{ value: "all", label: "All Categories" }, ...qbank.categories];
-  const SAMPLE_QUESTIONS = qbank.sampleQuestions || [];
+
+  // Load questions from database on mount
+  useEffect(() => {
+    (async () => {
+      setIsLoadingQuestions(true);
+      try {
+        const dbQuestions = await Question.list();
+        if (dbQuestions.length > 0) {
+          // Map DB questions to the format the Study UI expects
+          const mapped = dbQuestions.map(q => ({
+            id: q.id,
+            category: q.category,
+            difficulty: q.difficulty || 'intermediate',
+            stem: q.question_text,
+            question: q.question_text,
+            options: (q.options || []).map(opt => ({
+              text: opt.text,
+              is_correct: opt.is_correct,
+              explanation: opt.explanation || q.explanation || '',
+            })),
+            educational_objective: q.explanation || '',
+            bottom_line: q.reference || '',
+            related_topics: q.tags || [],
+            user_stats: { pct_A: 25, pct_B: 25, pct_C: 25, pct_D: 25, avg_time: 60 },
+          }));
+          setAllQuestions(mapped);
+        } else {
+          // Fall back to sample questions from config
+          setAllQuestions(qbank.sampleQuestions || []);
+        }
+      } catch (e) {
+        console.error("Error loading questions:", e);
+        setAllQuestions(qbank.sampleQuestions || []);
+      }
+      setIsLoadingQuestions(false);
+    })();
+  }, []);
 
   useEffect(() => {
     if (phase !== "active" || !mode || !STUDY_MODES[mode].timed) return;
@@ -90,7 +129,18 @@ export default function Study() {
   }, [phase, currentIdx, answers, questions]);
 
   const startSession = () => {
-    const qs = [...SAMPLE_QUESTIONS].sort(() => Math.random() - 0.5).slice(0, Math.min(filters.count, SAMPLE_QUESTIONS.length));
+    let pool = [...allQuestions];
+    // Apply category filter
+    if (filters.category !== "all") {
+      pool = pool.filter(q => q.category === filters.category);
+    }
+    // Apply difficulty filter
+    if (filters.difficulty !== "all") {
+      pool = pool.filter(q => q.difficulty === filters.difficulty);
+    }
+    // Shuffle and limit
+    pool.sort(() => Math.random() - 0.5);
+    const qs = pool.slice(0, Math.min(filters.count, pool.length));
     setQuestions(qs); setAnswers({}); setFlagged([]); setCurrentIdx(0); setPhase("active");
     if (STUDY_MODES[mode].timed) setTimeLeft(Math.round(qs.length * 90 * (1 / parseFloat(filters.timePressure))));
   };
@@ -136,10 +186,15 @@ export default function Study() {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 12 }}>
             <div><label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#5f6368", marginBottom: 6 }}>Category</label><select value={filters.category} onChange={e => setFilters(p => ({ ...p, category: e.target.value }))} style={{ width: "100%", padding: "10px 12px", border: "1px solid #e0e3e8", borderRadius: 8, fontSize: 13 }}>{CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}</select></div>
             <div><label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#5f6368", marginBottom: 6 }}>Difficulty</label><select value={filters.difficulty} onChange={e => setFilters(p => ({ ...p, difficulty: e.target.value }))} style={{ width: "100%", padding: "10px 12px", border: "1px solid #e0e3e8", borderRadius: 8, fontSize: 13 }}><option value="all">All</option><option value="basic">Basic</option><option value="intermediate">Intermediate</option><option value="advanced">Advanced</option></select></div>
-            <div><label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#5f6368", marginBottom: 6 }}>Questions</label><select value={filters.count} onChange={e => setFilters(p => ({ ...p, count: parseInt(e.target.value) }))} style={{ width: "100%", padding: "10px 12px", border: "1px solid #e0e3e8", borderRadius: 8, fontSize: 13 }}><option value={3}>3</option><option value={5}>5</option><option value={10}>10</option><option value={25}>25</option></select></div>
+            <div><label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#5f6368", marginBottom: 6 }}>Questions</label><select value={filters.count} onChange={e => setFilters(p => ({ ...p, count: parseInt(e.target.value) }))} style={{ width: "100%", padding: "10px 12px", border: "1px solid #e0e3e8", borderRadius: 8, fontSize: 13 }}><option value={5}>5</option><option value={10}>10</option><option value={20}>20</option><option value={40}>40 (Full Block)</option><option value={100}>100</option></select></div>
           </div>
         </div>
-        <button onClick={startSession} disabled={!mode} style={{ display: "block", width: "100%", padding: 14, background: mode ? "#1a56db" : "#ccc", color: "white", border: "none", borderRadius: 8, fontSize: 15, fontWeight: 600, cursor: mode ? "pointer" : "not-allowed" }}>{mode ? `Start ${STUDY_MODES[mode].name}` : "Select a mode"}</button>
+        {isLoadingQuestions ? (
+          <div style={{ textAlign: "center", padding: 20, color: "#5f6368" }}>Loading questions from database...</div>
+        ) : (
+          <div style={{ textAlign: "center", marginBottom: 16, fontSize: 13, color: "#059669", fontWeight: 600 }}>{allQuestions.length} questions available</div>
+        )}
+        <button onClick={startSession} disabled={!mode || isLoadingQuestions || allQuestions.length === 0} style={{ display: "block", width: "100%", padding: 14, background: (mode && !isLoadingQuestions && allQuestions.length > 0) ? "#1a56db" : "#ccc", color: "white", border: "none", borderRadius: 8, fontSize: 15, fontWeight: 600, cursor: (mode && !isLoadingQuestions) ? "pointer" : "not-allowed" }}>{isLoadingQuestions ? "Loading..." : mode ? `Start ${STUDY_MODES[mode].name}` : "Select a mode"}</button>
         <div style={{ textAlign: "center", marginTop: 20, fontSize: 11, color: "#9aa0a6", padding: 10, background: "#f0f2f5", borderRadius: 8 }}><strong>Keyboard:</strong> A/B/C/D = answer · ←/→ = navigate</div>
       </div>
     );
